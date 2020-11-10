@@ -68,9 +68,11 @@ import org.openmrs.module.kenyaemrIL.il.observation.OBSERVATION_RESULT;
 import org.openmrs.module.kenyaemrIL.il.observation.ObservationMessage;
 import org.openmrs.module.kenyaemrIL.il.observation.VIRAL_LOAD_RESULT;
 import org.openmrs.module.kenyaemrIL.il.pharmacy.DispenseMessage;
+import org.openmrs.module.kenyaemrIL.il.pharmacy.OrderMessage;
 import org.openmrs.module.kenyaemrIL.il.pharmacy.ILPharmacyDispense;
 import org.openmrs.module.kenyaemrIL.il.pharmacy.ILPharmacyOrder;
 import org.openmrs.module.kenyaemrIL.il.pharmacy.PHARMACY_DISPENSE;
+import org.openmrs.module.kenyaemrIL.il.pharmacy.PHARMACY_ENCODED_ORDER;
 import org.openmrs.module.kenyaemrIL.il.utils.MessageHeaderSingleton;
 import org.openmrs.module.kenyaemrIL.il.viralload.ViralLoadMessage;
 import org.openmrs.module.kenyaemrIL.kenyaemrUtils.Utils;
@@ -474,6 +476,174 @@ public class KenyaEMRILServiceImpl extends BaseOpenmrsService implements KenyaEM
 
     @Override
     public boolean processPharmacyOrder(ILMessage ilMessage, String messsageUUID) {
+
+       /* boolean success = false;
+        String cccNumber = null;
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMdd");
+        KenyaEMRILMessage kenyaEMRILMessage = getKenyaEMRILMessageByUuid(messsageUUID);
+//        1. Fetch the person to update using the CCC number
+        for (INTERNAL_PATIENT_ID internalPatientId : ilMessage.getPatient_identification().getInternal_patient_id()) {
+            if (internalPatientId.getIdentifier_type().equalsIgnoreCase("CCC_NUMBER")) {
+                cccNumber = internalPatientId.getId().replaceAll("\\D", "");
+                ;
+                break;
+            }
+        }
+        if (cccNumber == null) {
+            // no patient with the given ccc number, proceed to create a new patient with the received details
+            //TODO:this is wrong we should discard this message  so do nothing
+            kenyaEMRILMessage.setStatus("Missing CCC Number");
+            success = false;
+            log.info("Pharmacy order message without CCC Number discarded " + new Date());
+        } else {
+            //            fetch the patient
+            List<Patient> patients = Context.getPatientService().getPatients(null, cccNumber, allPatientIdentifierTypes, true);
+            Patient patient;
+            if (patients.size() > 0) {
+                patient = patients.get(0);
+                //Save the dispense
+
+                OrderMessage orderMessage = ilMessage.extractPharmacyOrderMessage();
+                PHARMACY_ENCODED_ORDER[] orderInformation = orderMessage.getEncodedOrderList();
+                System.out.println("orderInformation============="+orderInformation);
+
+                Encounter appEncounter;
+
+                EncounterType encounterTypeDrugOrder = Context.getEncounterService().getEncounterTypeByUuid("7df67b83-1b84-4fe2-b1b7-794b4e9bfcc3");   //  Drug Order encounter
+                //Fetch all encounters
+                List<EncounterType> encounterTypes = new ArrayList<>();
+                encounterTypes.add(encounterTypeDrugOrder);
+                ArrayList<Order> orderList=new ArrayList<Order>();
+
+                ProviderService providerService = Context.getProviderService();
+                Provider provider = providerService.getProvider(1);        // Added default provider admin
+
+             *//*   for (PHARMACY_DISPENSE dispenseInfo : dispenseInformation) {
+                    String dispenseNotes = dispenseInfo.getDispensing_notes();
+                    String frequency = dispenseInfo.getFrequency();
+                    String quantityDispensed = dispenseInfo.getQuantity_dispensed();
+                    String dosage = dispenseInfo.getDosage();
+                    String codingSystem = dispenseInfo.getCoding_system();
+                    String strength = dispenseInfo.getStrength();
+                    String duration = dispenseInfo.getDuration();
+                    String actualDrugs = dispenseInfo.getActual_drugs();
+                    String drugName = dispenseInfo.getDrug_name();
+                    String dispenseMsgDatetime = dispenceMessage.getMessage_header().getMessage_datetime();
+                    Date ilMsgDate = null;
+                    //Validate
+                    if (drugName != null) {
+                        try {
+                            ilMsgDate = formatter.parse(dispenseMsgDatetime);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                        List<Encounter> drugOrderEncounters = Context.getEncounterService().getEncounters(patient, null, ilMsgDate, null, null, encounterTypes, null, null, null, false);
+                        if (drugOrderEncounters.size() > 0) {
+                            appEncounter = drugOrderEncounters.get(0);
+
+                            DrugOrder drugOrder;
+                            drugOrder=new DrugOrder();
+
+                            OrderGroup orderGroup;
+                            orderGroup=new OrderGroup();          // Assuming a new ordergroup
+
+                            drugOrder.setPatient(patient);
+                            drugOrder.setEncounter(appEncounter);
+                            drugOrder.setDateCreated(ilMsgDate);
+                            Drug drug = conceptService.getDrugByNameOrId(drugNameConverter(drugName));    // Needs a mapper
+                            drugOrder.setDrug(drug);
+                            drugOrder.setInstructions(dispenseNotes);
+                            drugOrder.setOrderer(provider);      //Assuming super user untill we get ProviderID in the message
+                            drugOrder.setDose(Double.parseDouble(dosage.replaceAll("[^\\d.]", "")));
+                            Concept doseUnitConcept = conceptService.getConceptByUuid("161553AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");   // Assuming MG/Milligram
+                            Concept quantityUnitConcept=conceptService.getConceptByUuid("1608AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");   // Assuming capsules
+                            drugOrder.setDoseUnits(doseUnitConcept);
+                            drugOrder.setDosingType(SimpleDosingInstructions.class);
+                            Concept route = conceptService.getConcept(160240);
+                            drugOrder.setRoute(route);
+                            OrderFrequency orderFrequency = Context.getOrderService().getOrderFrequency(1);  // Needs a mapper
+                            drugOrder.setFrequency(orderFrequency);
+                            CareSetting outpatient = Context.getOrderService().getCareSettingByName("OUTPATIENT");
+                            drugOrder.setCareSetting(outpatient);
+                            drugOrder.setQuantity(Double.parseDouble(quantityDispensed));
+                            drugOrder.setQuantityUnits(quantityUnitConcept);
+                            drugOrder.setNumRefills(0);
+                            drugOrder.setOrderGroup(orderGroup);
+                            orderList.add(drugOrder);
+
+//                            appEncounter.addObs(o);
+//                            Context.getEncounterService().saveEncounter(appEncounter);
+
+                            orderGroup.setOrders(orderList);
+                            orderGroup.setPatient(patient);
+                            orderGroup.setEncounter(appEncounter);
+                            Context.getOrderService().saveOrderGroup(orderGroup);
+                            kenyaEMRILMessage.setStatus("Success");
+                            success = true;
+
+                        } else {
+                            //Define encounter and save encounter
+                            EncounterService encounterService = Context.getEncounterService();
+                            Encounter encounter = new Encounter();
+                            EncounterType encounterType=encounterService.getEncounterTypeByUuid("7df67b83-1b84-4fe2-b1b7-794b4e9bfcc3");
+                            encounter.setEncounterType(encounterType);
+                            encounter.setPatient(patient);
+                            encounter.setEncounterDatetime(new Date());
+                            encounter.setDateCreated(new Date());
+                            encounterService.saveEncounter(encounter);
+
+                            DrugOrder drugOrder;
+                            drugOrder=new DrugOrder();
+
+                            OrderGroup orderGroup;
+                            orderGroup=new OrderGroup();          // Assuming a new ordergroup
+
+                            drugOrder.setPatient(patient);
+                            drugOrder.setEncounter(encounter);
+                            drugOrder.setDateCreated(new Date());
+                            Drug drug = conceptService.getDrugByNameOrId(drugNameConverter(drugName));    // Needs a mapper
+                            drugOrder.setDrug(drug);
+                            drugOrder.setInstructions(dispenseNotes);
+                            drugOrder.setOrderer(provider);      //Assuming super user untill we get ProviderID in the message
+                            drugOrder.setDose(Double.parseDouble(dosage.replaceAll("[^\\d.]", "")));
+                            Concept doseUnitConcept = conceptService.getConceptByUuid("161553AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");   // Assuming MG/Milligram
+                            Concept quantityUnitConcept=conceptService.getConceptByUuid("1608AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");   // Assuming capsules
+                            drugOrder.setDoseUnits(doseUnitConcept);
+                            drugOrder.setDosingType(SimpleDosingInstructions.class);
+                            Concept route = conceptService.getConcept(160240);
+                            drugOrder.setRoute(route);
+                            OrderFrequency orderFrequency = Context.getOrderService().getOrderFrequency(1);  // Needs a mapper
+                            drugOrder.setFrequency(orderFrequency);
+                            CareSetting outpatient = Context.getOrderService().getCareSettingByName("OUTPATIENT");
+                            drugOrder.setCareSetting(outpatient);
+                            drugOrder.setQuantity(Double.parseDouble(quantityDispensed));
+                            drugOrder.setQuantityUnits(quantityUnitConcept);
+                            drugOrder.setNumRefills(0);
+                            drugOrder.setOrderGroup(orderGroup);
+                            orderList.add(drugOrder);
+
+//                            appEncounter.addObs(o);
+//                            Context.getEncounterService().saveEncounter(appEncounter);
+
+                            orderGroup.setOrders(orderList);
+                            orderGroup.setPatient(patient);
+                            orderGroup.setEncounter(encounter);
+                            Context.getOrderService().saveOrderGroup(orderGroup);
+                            kenyaEMRILMessage.setStatus("Success");
+                            success = true;
+                        }
+
+                    }
+                }*//*
+
+            } else {
+                log.error("Cannot save drug dispense: CCC number format does not match:");
+                kenyaEMRILMessage.setStatus("Could not find a match");
+                success = false;
+            }
+
+        }
+        return success;*/
         throw new NotYetImplementedException("Not Yet Implemented");
     }
 
@@ -1560,6 +1730,37 @@ public class KenyaEMRILServiceImpl extends BaseOpenmrsService implements KenyaEM
         }
         return isSuccessful;
     }
+
+
+    @Override
+    public boolean logPharmacyOrders(ILMessage ilMessage) {
+        boolean isSuccessful;
+        //Message Header
+        MESSAGE_HEADER messageHeader = MessageHeaderSingleton.getMessageHeaderInstance("RDE^001");
+        ilMessage.setMessage_header(messageHeader);
+        KenyaEMRILMessage kenyaEMRILMessage = new KenyaEMRILMessage();
+        try {
+            OrderMessage orderMessage = ilMessage.extractPharmacyOrderMessage();
+            String messageString = mapper.writeValueAsString(orderMessage);
+            kenyaEMRILMessage.setHl7_type("RDE^001");
+            kenyaEMRILMessage.setSource("KENYAEMR");
+            kenyaEMRILMessage.setMessage(messageString);
+            kenyaEMRILMessage.setDescription("");
+            kenyaEMRILMessage.setName("");
+            kenyaEMRILMessage.setMessage_type(ILMessageType.OUTBOUND.getValue());
+            KenyaEMRILMessage savedInstance = saveKenyaEMRILMessage(kenyaEMRILMessage);
+            if (savedInstance != null) {
+                isSuccessful = true;
+            } else {
+                isSuccessful = false;
+            }
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+            isSuccessful = false;
+        }
+        return isSuccessful;
+    }
+
 
     private Patient wrapIlPerson(ILMessage ilPerson) {
 
